@@ -1,0 +1,90 @@
+// config
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enums
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+  DOCTOR
+}
+
+enum Lang {
+  EN
+  AR
+}
+
+enum LoginType {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
+// Models
+model Admin {
+  id                     String    @id @default(uuid())
+  firstName              String
+  lastName               String
+  email                  String    @unique
+  role                   Role      @default(ADMIN)
+  password               String
+  phone                  String?   @unique
+  isSuperAdmin           Boolean   @default(false)
+  isVerified             Boolean   @default(false)
+  isBlocked              Boolean   @default(false)
+  isDeleted              Boolean   @default(false)
+  passwordChangedAt      DateTime?
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
+  verificationToken      String?
+  verificationTokenExp   DateTime?
+  token                  String?
+  tokenExpDate           DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([firstName, lastName])
+}
+
+model User {
+  id                        String    @id @default(uuid())
+  lang                      Lang      @default(AR)
+  loginType                 LoginType @default(EMAIL)
+  fullName                  String
+  email                     String    @unique
+  phone                     String?   @unique
+  role                      Role      @default(USER)
+  // Password
+  password                  String
+  passwordChangedAt         DateTime?
+  passwordResetCode         String?
+  passwordResetCodeExp      DateTime?
+  passwordResetCodeVerified Boolean?
+  // Verification
+  verificationCode          String?
+  verificationCodeExp       DateTime?
+  verificationCodeVerified  Boolean?
+  passwordVerificationToken String?
+  passwordResetExpiresAt    DateTime?
+  isVerified                Boolean   @default(false)
+  // Active
+  deactivatedAt             DateTime?
+  isActive                  Boolean   @default(true)
+  isBlocked                 Boolean   @default(false)
+  // Auth
+  token                     String?
+  tokenExpDate              DateTime?
+  notificationToken         String?   @default("")
+  // Timestamps
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index(fullName)
+}
