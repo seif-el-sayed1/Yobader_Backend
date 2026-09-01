@@ -4,7 +4,6 @@ const { translate } = require("../utils/translation");
 const { Prisma } = require("@prisma/client");
 
 const sendErrorForDev = (err, res, lang) => {
-  console.log("🚀 ~ sendErrorForDev ~ err:", err);
   res.status(err.statusCode).json({
     success: err.success || false,
     message: err.message || translate("Something went wrong", lang),
@@ -26,19 +25,40 @@ const sendErrorForProd = (err, res, lang) => {
   }
 };
 
-const handleDuplicatedFieldsDB = (err, lang) => {
-  const cause = err.meta?.driverAdapterError?.cause;
-  let duplicateKey = "field";
-  if (cause?.constraint?.fields?.length) {
-    duplicateKey = cause.constraint.fields[0];
-  } else if (cause?.originalMessage) {
+const extractFieldFromCause = (cause) => {
+  if (!cause) return null;
+
+  if (cause.constraint?.fields?.length) return cause.constraint.fields[0];
+
+  if (cause.constraint?.columns?.length) return cause.constraint.columns[0];
+
+  if (cause.constraint?.index) {
+    const parts = cause.constraint.index.split("_");
+    return parts.length > 2 ? parts[parts.length - 2] : parts[0];
+  }
+
+  if (cause.column) return cause.column;
+  if (cause.field) return cause.field;
+
+  if (cause.originalMessage) {
     const match = cause.originalMessage.match(/"([^"]+)"/g);
-    const constraintName = match?.[1]?.replace(/"/g, "");
+    const constraintName = match?.[0]?.replace(/"/g, "");
     if (constraintName) {
       const parts = constraintName.split("_");
-      duplicateKey = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+      return parts.length > 2 ? parts[parts.length - 2] : parts[0];
     }
   }
+
+  return null;
+};
+
+const handleDuplicatedFieldsDB = (err, lang) => {
+  const cause = err.meta?.driverAdapterError?.cause;
+  const duplicateKey =
+    extractFieldFromCause(cause) ||
+    (Array.isArray(err.meta?.target) ? err.meta.target[0] : err.meta?.target) ||
+    "field";
+
   const alreadyUsed = translate("is already used", lang);
   const fieldName = capitalizeFirstLetter(translate(duplicateKey, lang));
   return new ApiError(`${fieldName} ${alreadyUsed}`, 400);
@@ -50,20 +70,23 @@ const handleRecordNotFound = (err, lang) => {
 };
 
 const handleForeignKeyConstraint = (err, lang) => {
-  const field = err.meta?.field_name || "field";
-  const message = `${translate("Invalid relation", lang)}: ${field}`;
+  const cause = err.meta?.driverAdapterError?.cause;
+  const field = extractFieldFromCause(cause) || err.meta?.field_name || "field";
+  const message = `${translate("Invalid relation", lang)}: ${translate(field, lang)}`;
   return new ApiError(message, 400);
 };
 
 const handleValueTooLong = (err, lang) => {
-  const field = err.meta?.column_name || "field";
+  const cause = err.meta?.driverAdapterError?.cause;
+  const field = extractFieldFromCause(cause) || err.meta?.column_name || "field";
   const fieldName = capitalizeFirstLetter(translate(field, lang));
   const message = `${fieldName} ${translate("value is too long", lang)}`;
   return new ApiError(message, 400);
 };
 
 const handleNullConstraint = (err, lang) => {
-  const field = err.meta?.constraint || "field";
+  const cause = err.meta?.driverAdapterError?.cause;
+  const field = extractFieldFromCause(cause) || err.meta?.constraint || "field";
   const fieldName = capitalizeFirstLetter(translate(field, lang));
   const message = `${fieldName} ${translate("is required", lang)}`;
   return new ApiError(message, 400);
