@@ -2,7 +2,7 @@ const generateHTML = ({
     link = process.env.FRONTEND_URL,
     logo = process.env.LOGO_URL,
     backgroundColor = "#F4F6F8",
-    primaryColor = "#0F766E",        // Teal - يتناسب مع ستايل التطبيق
+    primaryColor = "#0F766E",        
     secondaryColor = "#ffffff",
     emailTitle,
     emailSubTitle,
