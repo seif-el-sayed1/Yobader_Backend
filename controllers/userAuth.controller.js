@@ -268,6 +268,129 @@ class UserController {
   });
 
 
+   // @desc    Update logged user password
+   // @route   PATCH /users/auth/updatePassword
+   // @access  Private
+  updateLoggedUserPassword = asyncHandler(async (req, res, next) => {
+    const lang = req.headers.lang || "en";
+
+    if (!(await Auth.comparePassword(req.user, req.body.currentPassword)))
+      return next(new ApiError(translate("Incorrect password", lang), 401));
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        password: await Auth.hashPassword(req.body.newPassword),
+        passwordChangedAt: new Date()
+      }
+    });
+
+    if (!user) return next(new ApiError("User not found", 404));
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully, please login again"
+    });
+  });
+
+  //@desc  Verify OTP
+  //@route POST /users/auth/verify-otp
+  //@access Private
+  verifyOtp = asyncHandler(async (req, res, next) => {
+    const lang = req.headers.lang || "en";
+
+    const hashedCode = hashCode(req.body.otp);
+    const user = await prisma.user.findFirst(
+      {
+        where: {
+          verificationCode: hashedCode,
+          verificationCodeExp: { gt: new Date() }
+        }
+      }
+    );
+
+    if (!user)
+      return next(new ApiError(translate("OTP isn't found!", lang), 403));
+
+    let token = { token: user.token, tokenExpDate: user.tokenExpDate };
+
+    if (!token.token) token = await Auth.generateToken(user.id, user.role);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        verificationCode: null,
+        verificationCodeExp: null,
+        phone: user.phone || undefined,
+        email: user.email || undefined,
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Account verified successfully",
+      data: {
+        ...this.#getUsersData(user, lang),
+        ...token
+      }
+    });
+  });
+
+  //@desc  Send OTP
+  //@route POST /users/auth/send-otp
+  //@access Private
+  sendOtp = asyncHandler(async (req, res, next) => {
+    let { email } = req.body;
+    const lang = req.headers.lang || "en";
+
+    const user = await prisma.user.findFirst({
+      where: {
+        AND: [{ isVerified: false }, { email }]
+      }
+    });
+
+    if (!user) return next(new ApiError(translate("User Not Found!", lang), 404));
+
+    const { code, hashedCode } = await generateCode();
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationCode: hashedCode,
+        verificationCodeExp: new Date(Date.now() + 10 * 60 * 1000)
+      }
+    });
+
+    if (email) {
+      await EmailController.userVerificationEmail(code, email);
+      return res.status(200).json({
+        success: true,
+        message: "Verification OTP is sent to your Email"
+      });
+    }
+
+  });
+
+  //@desc  Log Out
+  //@route POST /users/auth/log-out
+  //@access Private
+  logOut = asyncHandler(async (req, res, next) => {
+    const user = req.user;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        notificationToken: null,
+        token: null,
+        tokenExpDate: null
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "User logged out successfully!"
+    });
+  });
 
 }
 
