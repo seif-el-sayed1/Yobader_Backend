@@ -24,6 +24,49 @@ class UserController {
     };
   };
 
+  // @desc Login with google
+  // @route POST /users/auth/google
+  // @access Public
+  googleAuth = asyncHandler(async (req, res, next) => {
+    const { provider, token, notificationToken } = req.body;
+    const lang = req.headers.lang || "en";
+
+    if (!provider || !token) {
+      return next(new ApiError(translate("Provider and token required", lang), 400));
+    }
+
+    const validProviders = Object.values(OAUTH_PROVIDERS);
+    if (!validProviders.includes(provider)) {
+      return next(new ApiError(translate("Invalid provider", lang), 400));
+    }
+
+    try {
+      const { user, token: authToken, tokenExpDate } = await oauthService.handleOAuth(
+        provider,
+        token,
+        notificationToken
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Welcome ${user.fullName}`,
+        data: {
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          createdAt: user.createdAt,
+          role: user.role,
+          isVerified: user.isVerified,
+          loginType: user.loginType,
+          token: authToken,
+          tokenExpDate,
+        },
+      });
+    } catch (error) {
+        next(new ApiError(error.message || "Authentication failed", error.statusCode || 400));
+    }
+  });
+
 
   login = (user, loginType) =>
     asyncHandler(async (req, res, next) => {
@@ -225,7 +268,6 @@ class UserController {
   });
 
 
-   
 
 }
 
