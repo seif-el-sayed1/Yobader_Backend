@@ -147,6 +147,41 @@ class UserController {
     return this.login(user)(req, res, next);
   });
 
+  // @desc    Sign Up
+  // @route   POST /users/auth/register
+  // @access  Public
+  userRegister = async (req, res, next) => {
+    try {
+      const { code, hashedCode } = await generateCode();
+
+      const user = await prisma.user.create({
+        data: {
+          fullName: req.body.fullName,
+          email: req.body.email,
+          phone: req.body.phone,
+          loginType: "EMAIL", 
+          notificationToken: req.body.notificationToken,
+          password: await Auth.hashPassword(req.body.password),
+          verificationCode: hashedCode,
+          verificationCodeExp: new Date(Date.now() + 10 * 60 * 1000)
+        }
+      });
+
+      await userVerificationEmail(code, req.body.email);
+
+      res.status(200).json({
+        success: true,
+        message: "Verification OTP is sent to your Email",
+        data: {
+          ...this.#getUsersData(user, req.headers.lang)
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  
 
 }
 
