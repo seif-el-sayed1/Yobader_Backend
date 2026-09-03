@@ -18,3 +18,4 @@ serviceAccount-Firebase-*.json
 !runtime.txt
 !requirements.txt
 /generated/prisma
+*secret*
