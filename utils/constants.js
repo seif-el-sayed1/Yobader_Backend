@@ -4,4 +4,14 @@ exports.USER = "USER";
 
 exports.ROLES = [exports.SUPER_ADMIN, exports.ADMIN, exports.USER];
 
-exports.LOGIN_TYPE = ["APPLE", "GOOGLE", "EMAIL", "SOCIAL"];
+exports.LOGIN_TYPE = ["EMAIL", "GOOGLE", "FACEBOOK", "APPLE"]; 
+
+const OAUTH_PROVIDERS = {
+  EMAIL: "EMAIL",
+  GOOGLE: "GOOGLE",
+  FACEBOOK: "FACEBOOK",
+  APPLE: "APPLE",
+};
+exports.OAUTH_PROVIDERS = OAUTH_PROVIDERS;
+
+exports.COURSE_LEVELS = ["NORMAL", "INTERMEDIATE", "ADVANCED", "NORMAL"]
