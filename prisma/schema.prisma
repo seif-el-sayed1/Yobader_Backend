@@ -27,6 +27,20 @@ enum LoginType {
   APPLE
 }
 
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  NORMAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
 // Models
 model Admin {
   id                     String    @id @default(uuid())
@@ -54,13 +68,13 @@ model Admin {
 }
 
 model User {
-  id                        String    @id @default(uuid())
-  lang                      Lang      @default(AR)
-  loginType                 LoginType @default(EMAIL)
+  id                        String       @id @default(uuid())
+  lang                      Lang         @default(AR)
+  loginType                 LoginType    @default(EMAIL)
   fullName                  String
-  email                     String    @unique
-  phone                     String?   @unique
-  role                      Role      @default(USER)
+  email                     String       @unique
+  phone                     String?      @unique
+  role                      Role         @default(USER)
   // Password
   password                  String
   passwordChangedAt         DateTime?
@@ -73,18 +87,146 @@ model User {
   verificationCodeVerified  Boolean?
   passwordVerificationToken String?
   passwordResetExpiresAt    DateTime?
-  isVerified                Boolean   @default(false)
+  isVerified                Boolean      @default(false)
   // Active
   deactivatedAt             DateTime?
-  isActive                  Boolean   @default(true)
-  isBlocked                 Boolean   @default(false)
+  isActive                  Boolean      @default(true)
+  isBlocked                 Boolean      @default(false)
   // Auth
   token                     String?
   tokenExpDate              DateTime?
-  notificationToken         String?   @default("")
+  notificationToken         String?      @default("")
   // Timestamps
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  enrollments               Enrollment[]
+  payments                  Payment[]
 
   @@index(fullName)
+}
+
+model Course {
+  id                 String       @id @default(uuid())
+  title              String
+  description        String
+  slug               String       @unique
+  price              Decimal      @default(0) @db.Decimal(10, 2)
+  image              String
+  courseLevel        CourseLevel  @default(NORMAL)
+  isFree             Boolean      @default(false)
+  isPublished        Boolean      @default(true)
+  isDeleted          Boolean      @default(false)
+  discountPercent    Float        @default(0)
+  hasDiscount        Boolean      @default(false)
+  priceAfterDiscount Decimal      @default(0) @db.Decimal(10, 2)
+  startDate          DateTime
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  //Relations
+  sections           Section[]
+  enrollments        Enrollment[]
+  coupons            Coupon[]
+  payments           Payment[]
+}
+
+model Section {
+  id        String   @id @default(uuid())
+  title     String
+  order     Int
+  isDeleted Boolean  @default(false)
+  lessons   Lesson[]
+  course    Course   @relation(fields: [courseId], references: [id])
+  courseId  String
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  video       String
+  attachments String[] @default([])
+  isPreview   Boolean  @default(true)
+  duration    Int?
+  order       Int
+  isDeleted   Boolean  @default(false)
+
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id])
+
+  progress LessonProgress[]
+
+  @@index([sectionId])
+}
+
+model LessonProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id])
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  @@unique([userId, lessonId])
+}
+
+model Enrollment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  paymentId String?  @unique
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  progress    Float     @default(0)
+  completedAt DateTime?
+  enrolledAt  DateTime  @default(now())
+
+  @@unique([userId, courseId])
+}
+
+model Coupon {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  discount  Float
+  isPercent Boolean   @default(true)
+  expiresAt DateTime?
+  maxUses   Int?
+  usedCount Int       @default(0)
+
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  orderCode    String @unique
+  amount       Float
+  billedAmount Float
+
+  cardNum  String?
+  cardType String?
+  currency String? @default("EGP")
+
+  status       PaymentStatus @default(PENDING)
+  clientSecret String?
+
+  enrollment Enrollment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([courseId])
 }
