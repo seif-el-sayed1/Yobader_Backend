@@ -121,6 +121,67 @@ class CourseController{
         });
     });
 
+    // @desc Delete Course
+    // @route DELETE courses/:id
+    // @access Private
+    deleteCourse = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const existingCourse = await prisma.course.findFirst({
+            where: { id, isDeleted: false },
+            include: {
+                sections: {
+                    include: {
+                        lessons: true,
+                    },
+                },
+            },
+        });
+
+        if (!existingCourse) {
+            return next(new ApiError("Course not found", 404));
+        }
+
+        const sectionIds = existingCourse.sections.map((s) => s.id);
+        const lessonIds = existingCourse.sections.flatMap((s) =>
+            s.lessons.map((l) => l.id)
+        );
+
+        await prisma.$transaction(async (tx) => {
+            if (lessonIds.length > 0) {
+                await tx.lessonProgress.deleteMany({
+                    where: { lessonId: { in: lessonIds } },
+                });
+            }
+
+            if (sectionIds.length > 0) {
+                await tx.lesson.deleteMany({
+                    where: { sectionId: { in: sectionIds } },
+                });
+            }
+
+            await tx.section.deleteMany({
+                where: { courseId: id },
+            });
+
+            await tx.enrollment.deleteMany({ where: { courseId: id } });
+            await tx.coupon.deleteMany({ where: { courseId: id } });
+            await tx.payment.deleteMany({ where: { courseId: id } });
+
+            await tx.course.delete({
+                where: { id },
+            });
+        });
+
+        if (existingCourse.image) {
+            await LocalStorageController.deleteOldImage(existingCourse.image);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Course deleted successfully",
+        });
+    });
 
 }
 
