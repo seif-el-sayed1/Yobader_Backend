@@ -183,6 +183,104 @@ class CourseController{
         });
     });
 
+    // @desc Get Course By ID
+    // @route GET courses/:id
+    // @access Private
+    getCourseById = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const course = await prisma.course.findFirst({
+            where: { id, isDeleted: false },
+            include: {
+                sections: {
+                    where: { isDeleted: false },
+                    orderBy: { order: "asc" },
+                    include: {
+                        lessons: {
+                            where: { isDeleted: false },
+                            orderBy: { order: "asc" },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!course) {
+            return next(new ApiError("Course not found", 404));
+        }
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+        const courseWithFullUrls = {
+            ...course,
+
+            image: course.image
+                ? `${baseUrl}${course.image}`
+                : null,
+
+            sections: course.sections.map(section => ({
+                ...section,
+
+                lessons: section.lessons.map(lesson => ({
+                    ...lesson,
+
+                    video: lesson.video
+                        ? `${baseUrl}${lesson.video}`
+                        : null,
+
+                    attachments: lesson.attachments.map(file =>
+                        file ? `${baseUrl}${file}` : null
+                    ),
+                })),
+            })),
+        };
+
+        res.status(200).json({
+            success: true,
+            data: courseWithFullUrls,
+        });
+    });
+
+    // @desc Get All Courses
+    // @route GET courses
+    // @access Private
+    getAllCourses = asyncHandler(async (req, res, next) => {
+        const features = new ApiFeatures(prisma.course, req.query, "Course", {
+            where: { isDeleted: false },
+            include: {
+                sections: {
+                    where: { isDeleted: false },
+                    select: {
+                        _count: {
+                            select: {
+                                lessons: { where: { isDeleted: false } }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        await features.search().filter().sort().paginate().calculatePagination();
+
+        const courses = await features.execute();
+
+        const data = courses.map(({ sections, ...course }) => ({
+            ...course,
+            image:  course.image ? `${req.protocol}://${req.get("host")}${course.image}` : null,
+            sectionsCount: sections.length,
+            lessonsCount: sections.reduce((sum, s) => sum + s._count.lessons, 0)
+        }));
+
+        res.status(200).json({
+            success: true,
+            data,
+            pagination: features.paginationResult
+        });
+    });
+    
+
+
 }
 
 module.exports = new CourseController();
