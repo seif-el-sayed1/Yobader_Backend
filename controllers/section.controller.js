@@ -77,6 +77,81 @@ class SectionController {
             data: section,
         });
     });
+    
+    // @desc    Delete a section
+    // @route   DELETE sections/:id
+    // @access  Private
+    deleteSection = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const existingSection = await prisma.section.findFirst({
+            where: { id, isDeleted: false },
+        });
+
+        if (!existingSection) {
+            return next(new ApiError("Section not found", 404));
+        }
+
+        await prisma.$transaction([
+            prisma.lesson.deleteMany({
+                where: { sectionId: id },
+            }),
+            prisma.section.delete({
+                where: { id },
+            }),
+        ]);
+
+        res.status(200).json({
+            success: true,
+            message: "Section deleted successfully",
+        });
+    });
+
+    // @desc    Get section by Id
+    // @route   GET sections/:id
+    // @access  Private
+    getSectionById = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const section = await prisma.section.findFirst({
+            where: {
+                id,
+                isDeleted: false
+            },
+            include: {
+                lessons: {
+                    where: { isDeleted: false },
+                    orderBy: { order: "asc" }
+                }
+            }
+        });
+
+        if (!section) {
+            return next(new ApiError("Section not found", 404));
+        }
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+        const data = {
+            ...section,
+            lessons: section.lessons.map(lesson => ({
+                ...lesson,
+
+                video: lesson.video
+                    ? `${baseUrl}${lesson.video}`
+                    : null,
+
+                attachments: lesson.attachments.map(file =>
+                    file ? `${baseUrl}${file}` : null
+                )
+            }))
+        };
+
+        res.status(200).json({
+            success: true,
+            data
+        });
+    });
 
 }
 
