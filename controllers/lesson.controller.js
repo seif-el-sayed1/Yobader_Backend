@@ -142,6 +142,43 @@ class LessonController {
         });
     });
 
+    // @desc   Delete a lesson 
+    // @route  DELETE /lessons/:id
+    // @access Private
+    deleteLesson = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const existingLesson = await prisma.lesson.findFirst({
+            where: { id },
+        });
+
+        if (!existingLesson) {
+            return next(new ApiError("Lesson not found", 404));
+        }
+
+        if (existingLesson.video) {
+            await LocalStorageController.deleteOldVideo(
+                existingLesson.video
+            );
+        }
+
+        if (existingLesson.attachments.length > 0) {
+            await Promise.all(
+                existingLesson.attachments.map(url =>
+                    LocalStorageController.deleteOldDocument(url)
+                )
+            );
+        }
+
+        await prisma.lesson.delete({
+            where: { id },
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Lesson deleted successfully",
+        });
+    });
 
 }
 
