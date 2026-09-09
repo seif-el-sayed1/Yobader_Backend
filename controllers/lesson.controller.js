@@ -63,6 +63,85 @@ class LessonController {
         });
     });
 
+    // @desc   Update a lesson
+    // @route  PATCH /api/lessons/:id
+    // @access Private
+    updateLesson = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+
+        const {
+            title,
+            description,
+            video,
+            videoUrlToDelete,
+            attachments,
+            attachmentUrlToDelete,
+            isPreview,
+            duration
+        } = req.body;
+
+        const existingLesson = await prisma.lesson.findFirst({
+            where: {
+                id,
+                isDeleted: false
+            }
+        });
+
+        if (!existingLesson) {
+            return next(new ApiError("Lesson not found", 404));
+        }
+
+        let updatedVideo = existingLesson.video;
+        let updatedAttachments = existingLesson.attachments;
+
+        if (videoUrlToDelete && existingLesson.video === videoUrlToDelete) {
+            await LocalStorageController.deleteOldVideo(videoUrlToDelete);
+            updatedVideo = null;
+        }
+
+        if (video) {
+            updatedVideo = video;
+        }
+
+        if (attachmentUrlToDelete) {
+            const urlsToDelete = Array.isArray(attachmentUrlToDelete)
+                ? attachmentUrlToDelete
+                : [attachmentUrlToDelete];
+
+            await Promise.all(
+                urlsToDelete.map(url =>
+                    LocalStorageController.deleteOldDocument(url)
+                )
+            );
+
+            updatedAttachments = updatedAttachments.filter(
+                url => !urlsToDelete.includes(url)
+            );
+        }
+
+        if (attachments && attachments.length > 0) {
+            updatedAttachments = [...updatedAttachments, ...attachments];
+        }
+
+        const lesson = await prisma.lesson.update({
+            where: { id },
+            data: {
+                title,
+                description,
+                video: updatedVideo,
+                attachments: updatedAttachments,
+                isPreview,
+                duration
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Lesson updated successfully",
+            data: lesson
+        });
+    });
+
 
 }
 
