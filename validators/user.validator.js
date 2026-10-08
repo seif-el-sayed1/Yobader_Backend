@@ -7,15 +7,11 @@ const {
 } = require("./validatorComponents");
 const ApiError = require("../utils/ApiError");
 const { translate } = require("../utils/translation");
+const { CLASSES, STUDY_MODES } = require("../utils/constants");
 const {
   checkIfPhoneStartsWithPlus2,
 } = require("../middlewares/phoneNumberChecker.middleware");
 
-/**
- * UserValidator class for validating user registration requests.
- *
- * This class contains methods for validating user data during the registration process using Joi and additional checks.
- */
 class UserValidator {
   validateRegisterUser = asyncHandler(async (req, res, next) => {
     const schema = Joi.object({
@@ -23,16 +19,34 @@ class UserValidator {
         .min(2)
         .max(32)
         .required()
-        .messages({ "any.required": "First Name is required" }),
-
-      email: Joi.string().email().required().messages({
-        "any.required": "Email is required",
-        "string.email": "Invalid Email Address",
-      }),
+        .messages({ "any.required": "Full Name is required" }),
 
       phone: Joi.string().custom(phoneNumberValidator).required().messages({
         "any.required": "Phone is required",
         "string.pattern.base": "Invalid Phone Number",
+      }),
+      
+      parentPhone: Joi.string().custom(phoneNumberValidator).required().messages({
+        "any.required": "Parent Phone is required",
+        "string.pattern.base": "Invalid Parent Phone Number",
+      }),
+
+      class: Joi.string().valid(...CLASSES).required().messages({
+        "any.required": "Class is required",
+        "any.only": "Invalid Class value",
+      }),
+      
+      groupeId: Joi.string().uuid().optional().messages({
+        "any.required": "Group ID is required"
+      }),
+
+      studyMode: Joi.string().valid(...STUDY_MODES).required().messages({
+        "any.required": "Study Mode is required",
+        "any.only": "Invalid Study Mode",
+      }),
+      
+      governmentId: Joi.string().uuid().required().messages({
+        "any.required": "Government ID is required"
       }),
 
       password: Joi.string().min(6).required().messages({
@@ -56,35 +70,51 @@ class UserValidator {
     next();
   });
 
+  validateLoginUser = asyncHandler(async (req, res, next) => {
+    const schema = Joi.object({
+      phone: Joi.string().custom(phoneNumberValidator).required().messages({
+        "any.required": "Phone is required",
+        "string.pattern.base": "Invalid Phone Number",
+      }),
+      password: Joi.string().required().messages({
+        "any.required": "Password is required",
+      }),
+      notificationToken: Joi.string().optional(),
+    });
+
+    joiErrorHandler(schema, req);
+    checkIfPhoneStartsWithPlus2(req);
+    next();
+  });
+
   validateUpdateUser = asyncHandler(async (req, res, next) => {
     const schema = Joi.object({
       fullName: Joi.string().optional().min(2).max(32),
       phone: Joi.string().custom(phoneNumberValidator).optional().messages({
         "string.pattern.base":
           "Phone number must start with '0' and contain exactly 11 digits",
-        "any.required": "Phone number is required",
       }),
-      email: Joi.string().email().optional(),
+      parentPhone: Joi.string().custom(phoneNumberValidator).optional(),
+      class: Joi.string().valid(...CLASSES).optional(),
+      groupeId: Joi.string().uuid().optional(),
+      studyMode: Joi.string().valid(...STUDY_MODES).optional(),
+      governmentId: Joi.string().uuid().optional(),
     });
 
     joiErrorHandler(schema, req);
     checkIfPhoneStartsWithPlus2(req);
 
-    if (
-      req.body.email &&
-      req.body.email !== req.user.email
-    ) {
+    if (req.body.phone && req.body.phone !== req.user.phone) {
       const user = await prisma.user.findFirst({
         where: {
-          email: req.body.email,
-          isVerified: true,
+          phone: req.body.phone,
         },
       });
 
       if (user) {
         return next(
           new ApiError(
-            translate("Duplicated Email", req.headers.lang),
+            translate("Duplicated Phone Number", req.headers.lang),
             400
           )
         );
