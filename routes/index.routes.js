@@ -12,6 +12,9 @@ let courseRoutes = require("./course.routes");
 let sectionRoutes = require("./section.routes");
 let lessonRoutes = require("./lesson.routes");
 
+let governmentRoutes = require("./government.routes");
+let groupeRoutes = require("./groupe.routes");
+
 appRouter.use(`${BASE_URL}/admins`, adminRoutes);
 appRouter.use(`${BASE_URL}/admins/auth`, adminAuthRoutes);
 appRouter.use(`${BASE_URL}/users/auth`, userAuthRoutes);
@@ -21,6 +24,8 @@ appRouter.use(`${BASE_URL}/courses`, courseRoutes);
 appRouter.use(`${BASE_URL}/sections`, sectionRoutes);
 appRouter.use(`${BASE_URL}/lessons`, lessonRoutes);
 
+appRouter.use(`${BASE_URL}/governments`, governmentRoutes);
+appRouter.use(`${BASE_URL}/groupes`, groupeRoutes);
 
 appRouter.get("/", (req, res) => {
   res.status(200).json({
