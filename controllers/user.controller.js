@@ -12,7 +12,9 @@ class UserController {
             },
             select: {
                 id: true,
-                email: true,
+                studyMode: true,
+                class: true,
+                parentPhone: true,
                 fullName: true,
                 phone: true,
                 lang: true
@@ -35,9 +37,10 @@ class UserController {
             },
             select: {
                 id: true,
-                email: true,
+                studyMode: true,
+                class: true,
+                parentPhone: true,
                 fullName: true,
-                role: true,
                 phone: true,
                 lang: true
             },
@@ -61,10 +64,11 @@ class UserController {
             where: { id: userId },
             select: {
                 id: true,
-                email: true,
+                studyMode: true,
+                class: true,
+                parentPhone: true,
                 fullName: true,
                 phone: true,
-                role: true,
                 lang: true
             }
         });
