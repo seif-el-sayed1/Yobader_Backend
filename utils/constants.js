@@ -4,8 +4,6 @@ exports.USER = "USER";
 
 exports.ROLES = [exports.SUPER_ADMIN, exports.ADMIN, exports.USER];
 
-exports.LOGIN_TYPE = ["EMAIL", "GOOGLE", "FACEBOOK", "APPLE"]; 
-
 const OAUTH_PROVIDERS = {
   EMAIL: "EMAIL",
   GOOGLE: "GOOGLE",
@@ -14,4 +12,7 @@ const OAUTH_PROVIDERS = {
 };
 exports.OAUTH_PROVIDERS = OAUTH_PROVIDERS;
 
+
+exports.CLASSES = ["FIRST_SECONDARY", "SECOND_SECONDARY", "THIRD_SECONDARY"]
+exports.STUDY_MODES = ["ONLINE", "CENTER"]
 exports.COURSE_LEVELS = ["NORMAL", "INTERMEDIATE", "ADVANCED", "NORMAL"]
