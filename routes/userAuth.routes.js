@@ -21,10 +21,8 @@ router.route("/register").post(
   UserAuthController.userRegister
 );
 
-router.route("/login").post(GlobalValidator.validateLogin, UserAuthController.userLogin);
-router.route("/google").post(UserAuthController.googleAuth);
+router.route("/login").post(UserValidator.validateLoginUser, UserAuthController.userLogin);
 
-router.route("/verify-account").post(UserAuthController.userVerifyAccount);
 
 router.patch(
   "/change-password",
@@ -34,8 +32,6 @@ router.patch(
   UserAuthController.updateLoggedUserPassword
 );
 
-router.post("/verify-otp", UserAuthController.verifyOtp);
-router.post("/send-otp", GlobalValidator.sendOtpValidator, UserAuthController.sendOtp);
 router.post("/log-out", protect, allowedTo(USER), UserAuthController.logOut);
 
 module.exports = router;
