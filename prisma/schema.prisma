@@ -41,6 +41,24 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum VideoStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum Classes {
+  FIRST_SECONDARY
+  SECOND_SECONDARY
+  THIRD_SECONDARY
+}
+
+enum StudyMode {
+  ONLINE
+  CENTER
+}
+
 // Models
 model Admin {
   id                     String    @id @default(uuid())
@@ -72,9 +90,13 @@ model User {
   lang                      Lang         @default(AR)
   loginType                 LoginType    @default(EMAIL)
   fullName                  String
-  email                     String       @unique
-  phone                     String?      @unique
+  phone                     String       @unique
+  parentPhone               String
+  class                     Classes
+  groupeId                  String?
+  studyMode                 StudyMode
   role                      Role         @default(USER)
+  governmentId              String
   // Password
   password                  String
   passwordChangedAt         DateTime?
@@ -99,10 +121,34 @@ model User {
   // Timestamps
   createdAt                 DateTime     @default(now())
   updatedAt                 DateTime     @updatedAt
+  government                Government   @relation(fields: [governmentId], references: [id])
+  groupe                    Groupe?      @relation(fields: [groupeId], references: [id])
   enrollments               Enrollment[]
   payments                  Payment[]
 
   @@index(fullName)
+}
+
+model Government {
+  id        String   @id @default(uuid())
+  name      String
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@index(name)
+}
+
+model Groupe {
+  id        String   @id @default(uuid())
+  name      String
+  day       String
+  time      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
 }
 
 model Course {
@@ -142,15 +188,16 @@ model Section {
 }
 
 model Lesson {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  video       String
-  attachments String[] @default([])
-  isPreview   Boolean  @default(true)
-  duration    Int?
-  order       Int
-  isDeleted   Boolean  @default(false)
+  id           String      @id @default(uuid())
+  title        String
+  description  String?
+  bunnyVideoId String      @unique
+  videoStatus  VideoStatus @default(UPLOADING)
+  attachments  String[]    @default([])
+  isPreview    Boolean     @default(true)
+  duration     Int?
+  order        Int
+  isDeleted    Boolean     @default(false)
 
   sectionId String
   section   Section @relation(fields: [sectionId], references: [id])
