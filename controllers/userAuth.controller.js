@@ -1,5 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const prisma = require("../startup/db");
+const { Prisma } = require("@prisma/client");
+const { generateStudentCode } = require("../utils/generateStudentCode");
 const Auth = require("../utils/auth");
 const ApiError = require("../utils/ApiError");
 const { translate } = require("../utils/translation");
@@ -12,7 +14,8 @@ class UserController {
       role: user.role,
       phone: user.phone,
       parentPhone: user.parentPhone,
-      class: user.class,
+      level: user.level,
+      studentCode: user.studentCode,
       studyMode: user.studyMode,
       createdAt: user.createdAt,
     };
@@ -98,30 +101,52 @@ class UserController {
       fullName,
       phone,
       parentPhone,
-      class: userClass,
+      level,
       groupeId,
       studyMode,
       governmentId,
       password,
-      notificationToken
+      notificationToken,
     } = req.body;
 
     const hashedPassword = await Auth.hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        fullName,
-        phone,
-        parentPhone,
-        class: userClass,
-        groupeId,
-        studyMode,
-        governmentId,
-        password: hashedPassword,
-        notificationToken,
-        isVerified: true,
+    const MAX_RETRIES = 5;
+    let user;
+
+    for (let i = 0; i < MAX_RETRIES; i++) {
+      try {
+        user = await prisma.user.create({
+          data: {
+            fullName,
+            phone,
+            parentPhone,
+            level,
+            groupeId,
+            studyMode,
+            governmentId,
+            password: hashedPassword,
+            notificationToken,
+            isVerified: true,
+            studentCode: generateStudentCode(),
+          },
+        });
+        break;
+      } catch (e) {
+        const isCodeCollision =
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002" &&
+          JSON.stringify(e.meta ?? {}).includes("studentCode");
+
+        if (!isCodeCollision) throw e;;
       }
-    });
+    }
+
+    if (!user) {
+      return next(
+        new ApiError("Failed to generate student code, please try again", 500)
+      );
+    }
 
     const token = await Auth.generateToken(user.id, user.role);
 
@@ -130,8 +155,8 @@ class UserController {
       message: "Account created successfully",
       data: {
         ...this.#getUsersData(user, req.headers.lang),
-        ...token
-      }
+        ...token,
+      },
     });
   });
 
