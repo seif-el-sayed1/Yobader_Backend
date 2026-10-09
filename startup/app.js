@@ -14,9 +14,13 @@ module.exports = (app) => {
   app.use(compression());
 
   app.use(uploadAnyFile);
-  app.use(bodyParser.json());
+  app.use(express.json({
+    limit: "100kb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
   app.use(bodyParser.urlencoded({ extended: true }));
-  app.use(express.json({ limit: "25kb" }));
 
   app.use(
     "/uploads",
