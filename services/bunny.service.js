@@ -34,6 +34,53 @@ class BunnyService {
         };
     };
 
+    deleteVideo = async (videoId) => {
+        const res = await fetch(
+            `https://video.bunnycdn.com/library/${process.env.BUNNY_LIBRARY_ID}/videos/${videoId}`,
+            {
+                method: "DELETE",
+                headers: { AccessKey: process.env.BUNNY_API_KEY }
+            }
+        );
+
+        if (!res.ok && res.status !== 404) {
+            throw new ApiError("Failed to delete video", 502);
+        }   
+    };
+
+    getVideo = async (videoId) => {
+        const res = await fetch(
+            `https://video.bunnycdn.com/library/${process.env.BUNNY_LIBRARY_ID}/videos/${videoId}`,
+            { headers: { AccessKey: process.env.BUNNY_API_KEY } }
+        );
+
+        if (!res.ok) throw new ApiError("Failed to fetch video", 502);
+        return res.json();
+    };
+
+    verifyWebhookSignature = (rawBody, headers) => {
+        if (headers["x-bunnystream-signature-version"] !== "v1") return false;
+        if (headers["x-bunnystream-signature-algorithm"] !== "hmac-sha256") return false;
+
+        const signature = headers["x-bunnystream-signature"];
+        const expected = crypto
+            .createHmac("sha256", process.env.BUNNY_READ_ONLY_API_KEY)
+            .update(rawBody)
+            .digest("hex");
+
+        if (
+            typeof signature !== "string" ||
+            signature.length !== expected.length ||
+            !/^[0-9a-f]+$/.test(signature)
+        ) {
+            return false;
+        }
+
+        return crypto.timingSafeEqual(
+            Buffer.from(expected, "utf8"),
+            Buffer.from(signature, "utf8")
+        );
+    };
 
 }
 
