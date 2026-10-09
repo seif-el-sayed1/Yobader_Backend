@@ -7,11 +7,11 @@ const {
 } = require("./validatorComponents");
 const ApiError = require("../utils/ApiError");
 const { translate } = require("../utils/translation");
-const { CLASSES, STUDY_MODES } = require("../utils/constants");
+const { LEVELS, STUDY_MODES } = require("../utils/constants");
 const {
   checkIfPhoneStartsWithPlus2,
 } = require("../middlewares/phoneNumberChecker.middleware");
-
+  
 class UserValidator {
   validateRegisterUser = asyncHandler(async (req, res, next) => {
     const schema = Joi.object({
@@ -31,9 +31,9 @@ class UserValidator {
         "string.pattern.base": "Invalid Parent Phone Number",
       }),
 
-      class: Joi.string().valid(...CLASSES).required().messages({
-        "any.required": "Class is required",
-        "any.only": "Invalid Class value",
+      level: Joi.string().valid(...LEVELS).required().messages({
+        "any.required": "Level is required",
+        "any.only": "Invalid Level value",
       }),
       
       groupeId: Joi.string().uuid().optional().messages({
@@ -95,7 +95,7 @@ class UserValidator {
           "Phone number must start with '0' and contain exactly 11 digits",
       }),
       parentPhone: Joi.string().custom(phoneNumberValidator).optional(),
-      class: Joi.string().valid(...CLASSES).optional(),
+      level: Joi.string().valid(...LEVELS).optional(),
       groupeId: Joi.string().uuid().optional(),
       studyMode: Joi.string().valid(...STUDY_MODES).optional(),
       governmentId: Joi.string().uuid().optional(),
