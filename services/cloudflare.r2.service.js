@@ -14,6 +14,26 @@ const s3 = new S3Client({
 const safeName = (name) => name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
 class R2Service {
+
+    uploadImage = async (file) => {
+        const key = `courses/${crypto.randomUUID()}-${safeName(file.originalname)}`;
+
+        await s3.send(new PutObjectCommand({
+            Bucket: process.env.R2_PUBLIC_BUCKET,
+            Key: key,
+            Body: file.buffer,
+            ContentType: file.mimetype
+        }));
+
+        return `${process.env.R2_PUBLIC_URL}/${key}`;
+    };
+
+    deleteImage = (url) =>
+        s3.send(new DeleteObjectCommand({
+            Bucket: process.env.R2_PUBLIC_BUCKET,
+            Key: url.replace(`${process.env.R2_PUBLIC_URL}/`, "")
+    }));
+
     uploadAttachment = async (file) => {
         const key = `lessons/${crypto.randomUUID()}/${safeName(file.originalname)}`;
 
