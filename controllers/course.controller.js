@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const prisma = require('../startup/db');
 const ApiError = require('../utils/ApiError');
 const ApiFeatures = require('../utils/ApiFeatures');
-const LocalStorageController = require('./localStorage.controller');
+const R2Service = require('../services/cloudflare.r2.service');
 
 class CourseController{
 
@@ -10,8 +10,14 @@ class CourseController{
     // @route POST courses
     // @access Private
     createCourse = asyncHandler(async (req, res, next) => {
-        const { title, description, slug, image, courseLevel, startDate,
+        const { title, description, slug, level,
                 isFree, isPublished, hasDiscount, discountPercent } = req.body;
+
+        const imageFile = req.files?.image?.[0];
+        if (!imageFile) return next(new ApiError("Image is required", 400));
+        if (!imageFile.mimetype.startsWith("image/")) {
+            return next(new ApiError("Image must be an image file", 400));
+        }
 
         const price = Number(req.body.price);
         const parsedIsFree = isFree === "true";
@@ -24,22 +30,29 @@ class CourseController{
             finalPriceAfterDiscount = price - (price * parsedDiscountPercent) / 100;
         }
 
-        const course = await prisma.course.create({
-            data: {
-                title,
-                description,
-                slug,
-                image,
-                courseLevel,
-                startDate: new Date(startDate),
-                isPublished: parsedIsPublished,
-                isFree: parsedIsFree,
-                price: parsedIsFree ? 0 : price,
-                hasDiscount: parsedHasDiscount,
-                discountPercent: parsedHasDiscount ? parsedDiscountPercent : 0,
-                priceAfterDiscount: parsedIsFree ? 0 : finalPriceAfterDiscount,
-            },
-        });
+        const imageUrl = await R2Service.uploadImage(imageFile);
+
+        let course;
+        try {
+            course = await prisma.course.create({
+                data: {
+                    title,
+                    description,
+                    slug,
+                    image: imageUrl,
+                    level,
+                    isPublished: parsedIsPublished,
+                    isFree: parsedIsFree,
+                    price: parsedIsFree ? 0 : price,
+                    hasDiscount: parsedHasDiscount,
+                    discountPercent: parsedHasDiscount ? parsedDiscountPercent : 0,
+                    priceAfterDiscount: parsedIsFree ? 0 : finalPriceAfterDiscount,
+                },
+            });
+        } catch (err) {
+            await R2Service.deleteImage(imageUrl).catch(() => {});
+            throw err;
+        }
 
         res.status(201).json({
             success: true,
@@ -52,15 +65,12 @@ class CourseController{
     // @route PATCH courses/:id
     // @access Private
     updateCourse = asyncHandler(async (req, res, next) => {
-
         const { id } = req.params;
         const {
             title,
             description,
             slug,
-            image,
             courseLevel,
-            startDate,
             isFree,
             isPublished,
             hasDiscount,
@@ -73,6 +83,11 @@ class CourseController{
 
         if (!existingCourse) {
             return next(new ApiError("Course not found", 404));
+        }
+
+        const imageFile = req.files?.image?.[0];
+        if (imageFile && !imageFile.mimetype.startsWith("image/")) {
+            return next(new ApiError("Image must be an image file", 400));
         }
 
         const price = req.body.price !== undefined ? Number(req.body.price) : existingCourse.price;
@@ -92,27 +107,36 @@ class CourseController{
             finalPriceAfterDiscount = price - (price * parsedDiscountPercent) / 100;
         }
 
-        if (image && existingCourse.image) {
-            await LocalStorageController.deleteOldImage(existingCourse.image);
+        const newImageUrl = imageFile ? await R2Service.uploadImage(imageFile) : null;
+
+        let course;
+        try {
+            course = await prisma.course.update({
+                where: { id },
+                data: {
+                    title: title ?? existingCourse.title,
+                    description: description ?? existingCourse.description,
+                    slug: slug ?? existingCourse.slug,
+                    image: newImageUrl ?? existingCourse.image,
+                    courseLevel: courseLevel ?? existingCourse.courseLevel,
+                    isPublished: parsedIsPublished,
+                    isFree: parsedIsFree,
+                    price: parsedIsFree ? 0 : price,
+                    hasDiscount: parsedHasDiscount,
+                    discountPercent: parsedHasDiscount ? parsedDiscountPercent : 0,
+                    priceAfterDiscount: parsedIsFree ? 0 : finalPriceAfterDiscount,
+                },
+            });
+        } catch (err) {
+            if (newImageUrl) await R2Service.deleteImage(newImageUrl).catch(() => {});
+            throw err;
         }
 
-        const course = await prisma.course.update({
-            where: { id },
-            data: {
-                title: title ?? existingCourse.title,
-                description: description ?? existingCourse.description,
-                slug: slug ?? existingCourse.slug,
-                image: image ?? existingCourse.image,
-                courseLevel: courseLevel ?? existingCourse.courseLevel,
-                startDate: startDate ? new Date(startDate) : existingCourse.startDate,
-                isPublished: parsedIsPublished,
-                isFree: parsedIsFree,
-                price: parsedIsFree ? 0 : price,
-                hasDiscount: parsedHasDiscount,
-                discountPercent: parsedHasDiscount ? parsedDiscountPercent : 0,
-                priceAfterDiscount: parsedIsFree ? 0 : finalPriceAfterDiscount,
-            },
-        });
+        if (newImageUrl && existingCourse.image) {
+            await R2Service.deleteImage(existingCourse.image).catch((err) =>
+                console.error("Old image cleanup failed:", err.message)
+            );
+        }
 
         res.status(200).json({
             success: true,
@@ -129,53 +153,20 @@ class CourseController{
 
         const existingCourse = await prisma.course.findFirst({
             where: { id, isDeleted: false },
-            include: {
-                sections: {
-                    include: {
-                        lessons: true,
-                    },
-                },
-            },
         });
 
         if (!existingCourse) {
             return next(new ApiError("Course not found", 404));
         }
 
-        const sectionIds = existingCourse.sections.map((s) => s.id);
-        const lessonIds = existingCourse.sections.flatMap((s) =>
-            s.lessons.map((l) => l.id)
-        );
-
-        await prisma.$transaction(async (tx) => {
-            if (lessonIds.length > 0) {
-                await tx.lessonProgress.deleteMany({
-                    where: { lessonId: { in: lessonIds } },
-                });
-            }
-
-            if (sectionIds.length > 0) {
-                await tx.lesson.deleteMany({
-                    where: { sectionId: { in: sectionIds } },
-                });
-            }
-
-            await tx.section.deleteMany({
-                where: { courseId: id },
-            });
-
-            await tx.enrollment.deleteMany({ where: { courseId: id } });
-            await tx.coupon.deleteMany({ where: { courseId: id } });
-            await tx.payment.deleteMany({ where: { courseId: id } });
-
-            await tx.course.delete({
-                where: { id },
-            });
+        await prisma.course.update({
+            where: { id },
+            data: {
+                isDeleted: true,
+                isPublished: false,
+                slug: `${existingCourse.slug}-deleted-${Date.now()}`,
+            },
         });
-
-        if (existingCourse.image) {
-            await LocalStorageController.deleteOldImage(existingCourse.image);
-        }
 
         res.status(200).json({
             success: true,
@@ -183,14 +174,68 @@ class CourseController{
         });
     });
 
-    // @desc Get Course By ID
+
+    // TODO: stay need enhancement
+    
+    // @desc Get all courses
+    // @route GET courses
+    // @access Public
+    getAllCourses = asyncHandler(async (req, res) => {
+        const courseInclude = {
+            sections: {
+                where: { isDeleted: false },
+                orderBy: { order: "asc" },
+                include: {
+                    lessons: {
+                        where: { isDeleted: false },
+                        orderBy: { order: "asc" },
+                    },
+                },
+            },
+        };
+
+        const apiFeatures = new ApiFeatures(
+            prisma.course,
+            req.query,
+            "Course",
+            {
+                where: { isDeleted: false, isPublished: true },
+                include: courseInclude,
+            }
+        )
+            .search()
+            .filter()
+            .sort()
+            .paginate();
+
+        apiFeatures.prismaArgs.where.isDeleted = false;
+        apiFeatures.prismaArgs.where.isPublished = true;
+
+        await apiFeatures.calculatePagination();
+
+        const courses = await apiFeatures.execute();
+
+        res.status(200).json({
+            success: true,
+            message: "Courses fetched successfully",
+            pagination: apiFeatures.paginationResult,
+            results: courses.length,
+            data: courses,
+        });
+    });
+
+    // @desc Get course by id
     // @route GET courses/:id
-    // @access Private
+    // @access Public
     getCourseById = asyncHandler(async (req, res, next) => {
         const { id } = req.params;
 
         const course = await prisma.course.findFirst({
-            where: { id, isDeleted: false },
+            where: {
+                id,
+                isDeleted: false,
+                isPublished: true,
+            },
             include: {
                 sections: {
                     where: { isDeleted: false },
@@ -209,77 +254,12 @@ class CourseController{
             return next(new ApiError("Course not found", 404));
         }
 
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-
-        const courseWithFullUrls = {
-            ...course,
-
-            image: course.image
-                ? `${baseUrl}${course.image}`
-                : null,
-
-            sections: course.sections.map(section => ({
-                ...section,
-
-                lessons: section.lessons.map(lesson => ({
-                    ...lesson,
-
-                    video: lesson.video
-                        ? `${baseUrl}${lesson.video}`
-                        : null,
-
-                    attachments: lesson.attachments.map(file =>
-                        file ? `${baseUrl}${file}` : null
-                    ),
-                })),
-            })),
-        };
-
         res.status(200).json({
             success: true,
-            data: courseWithFullUrls,
+            message: "Course fetched successfully",
+            data: course,
         });
     });
-
-    // @desc Get All Courses
-    // @route GET courses
-    // @access Private
-    getAllCourses = asyncHandler(async (req, res, next) => {
-        const features = new ApiFeatures(prisma.course, req.query, "Course", {
-            where: { isDeleted: false },
-            include: {
-                sections: {
-                    where: { isDeleted: false },
-                    select: {
-                        _count: {
-                            select: {
-                                lessons: { where: { isDeleted: false } }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        await features.search().filter().sort().paginate().calculatePagination();
-
-        const courses = await features.execute();
-
-        const data = courses.map(({ sections, ...course }) => ({
-            ...course,
-            image:  course.image ? `${req.protocol}://${req.get("host")}${course.image}` : null,
-            sectionsCount: sections.length,
-            lessonsCount: sections.reduce((sum, s) => sum + s._count.lessons, 0)
-        }));
-
-        res.status(200).json({
-            success: true,
-            data,
-            pagination: features.paginationResult
-        });
-    });
-    
-
 
 }
 
