@@ -112,7 +112,31 @@ class LessonController {
             }
         });
     });
+    
+    // @desc   Delete a lesson 
+    // @route  DELETE /lessons/:id
+    // @access Private
+    deleteLesson = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
 
+        const existingLesson = await prisma.lesson.findFirst({
+            where: { id, isDeleted: false } 
+        });
+
+        if (!existingLesson) {
+            return next(new ApiError("Lesson not found", 404));
+        }
+
+        await prisma.lesson.update({
+            where: { id },
+            data: { isDeleted: true }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Lesson deleted successfully"
+        });
+    });
 
 }
 
