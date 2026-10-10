@@ -138,6 +138,49 @@ class LessonController {
         });
     });
 
+    // @desc   Handle Bunny webhook callback
+    // @route  POST /lessons/bunny-callback
+    // @access Public
+    bunnyCallback = asyncHandler(async (req, res, next) => {
+        const rawBody = req.rawBody || req.body;
+
+        if (!BunnyService.verifyWebhookSignature(rawBody, req.headers)) {
+            return next(new ApiError("Invalid signature", 401));
+        }
+
+        const { VideoGuid, Status } = typeof req.body === 'object' ? req.body : JSON.parse(rawBody.toString("utf8"));
+
+        if (Status === 3) {
+            let duration;
+            try {
+                const video = await BunnyService.getVideo(VideoGuid);
+                duration = Math.round(video.length);
+            } catch (err) {
+                console.error("Failed to fetch video metadata:", err.message);
+            }
+
+            await prisma.lesson.updateMany({
+                where: { bunnyVideoId: VideoGuid },
+                data: {
+                    videoStatus: "READY",
+                    ...(duration ? { duration } : {})
+                }
+            });
+        } else if (Status === 5) {
+            await prisma.lesson.updateMany({
+                where: { bunnyVideoId: VideoGuid },
+                data: { videoStatus: "FAILED" }
+            });
+        } else if ([0, 1, 2, 4].includes(Status)) {
+            await prisma.lesson.updateMany({
+                where: { bunnyVideoId: VideoGuid, videoStatus: { not: "READY" } },
+                data: { videoStatus: "PROCESSING" }
+            });
+        }
+
+        res.sendStatus(200);
+    });
+
 }
 
 module.exports = new LessonController();
