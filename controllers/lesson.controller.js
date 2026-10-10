@@ -59,7 +59,61 @@ class LessonController {
         });
     });
 
- 
+    // @desc   Update a lesson
+    // @route  PATCH /api/lessons/:id
+    // @access Private
+    updateLesson = asyncHandler(async (req, res, next) => {
+        const { id } = req.params;
+        const { title, description, attachmentKeysToDelete, isPreview } = req.body;
+
+        const existingLesson = await prisma.lesson.findFirst({
+            where: { id, isDeleted: false }
+        });
+
+        if (!existingLesson) {
+            return next(new ApiError("Lesson not found", 404));
+        }
+
+        let updatedAttachments = existingLesson.attachments;
+
+        const keysToDelete = attachmentKeysToDelete
+            ? [].concat(attachmentKeysToDelete)
+            : [];
+
+        if (keysToDelete.some((key) => !existingLesson.attachments.includes(key))) {
+            return next(new ApiError("Invalid attachment key", 400));
+        }
+
+        updatedAttachments = updatedAttachments.filter(
+            (key) => !keysToDelete.includes(key)
+        );
+
+        const newKeys = await R2Service.uploadAttachments(req.files?.attachments);
+        updatedAttachments = [...updatedAttachments, ...newKeys];
+
+        const lesson = await prisma.lesson.update({
+            where: { id },
+            data: {
+                title,
+                description,
+                attachments: updatedAttachments,
+                isPreview
+            }
+        });
+
+        await Promise.all(keysToDelete.map(R2Service.deleteAttachment));
+
+        res.status(200).json({
+            success: true,
+            message: "Lesson updated successfully",
+            data: {
+                ...lesson,
+                attachments: await R2Service.getAttachmentLinks(lesson.attachments)
+            }
+        });
+    });
+
+
 }
 
 module.exports = new LessonController();
