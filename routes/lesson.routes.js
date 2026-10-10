@@ -1,34 +1,39 @@
 const express = require("express");
 
 const LessonController = require("../controllers/lesson.controller");
-const LessonValidator = require("../validators/lesson.validator");
-const LocalStorageController = require("../controllers/localStorage.controller");
 
 const parseFormData = require("../middlewares/parseFormData.middleware");
 const { protect, allowedTo } = require("../middlewares/auth.middleware");
-const { SUPER_ADMIN, ADMIN } = require("../utils/constants");
+const { SUPER_ADMIN, ADMIN,USER } = require("../utils/constants");
 
 const router = express.Router();
 
 router.post(
+    "/bunny-callback",
+     LessonController.bunnyCallback
+    );
+
+router.post(
     "/:sectionId",
     protect,
-    allowedTo(ADMIN, SUPER_ADMIN),
-    LocalStorageController.uploadSingleVideo("video"),
-    LocalStorageController.uploadMultipleDocuments("attachments"),
-    parseFormData(["isPreview"], []),  
-    LessonValidator.validateAddLesson,
+    allowedTo(ADMIN, SUPER_ADMIN, USER),
+    parseFormData(["isPreview"], []),
     LessonController.createLesson
 )
+
 router.patch(
     "/:id",
     protect,
     allowedTo(ADMIN, SUPER_ADMIN),
-    LocalStorageController.uploadSingleVideo("video"),
-    LocalStorageController.uploadMultipleDocuments("attachments"),
     parseFormData(["isPreview"], []),
-    LessonValidator.validateUpdateLesson,
-    LessonController.updateLesson    
+    LessonController.updateLesson
+)
+
+router.get(
+    "/:id",
+    protect,
+    allowedTo(ADMIN, SUPER_ADMIN),
+    LessonController.getLesson
 )
 
 router.delete(
